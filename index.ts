@@ -24,7 +24,6 @@ export default function(api) {
       CREATE TABLE IF NOT EXISTS entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp TEXT,
-        session_key TEXT,
         tool TEXT,
         label TEXT,
         url TEXT,
@@ -60,7 +59,6 @@ export default function(api) {
         
         return {
           timestamp: row.timestamp,
-          session_key: row.session_key,
           tool: row.tool,
           label: row.label,
           url: row.url,
@@ -85,17 +83,15 @@ export default function(api) {
       return;
     }
 
-    const session_key = ctx.sessionKey || "unknown";
-
     try {
       const db = await getDb();
       const timestamp = new Date().toISOString();
 
       if (event.toolName === "web_search") {
         await db.run(`
-          INSERT INTO entries (timestamp, session_key, tool, label, raw_json, tags)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `, [timestamp, session_key, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
+          INSERT INTO entries (timestamp, tool, label, raw_json, tags)
+          VALUES (?, ?, ?, ?, ?)
+        `, [timestamp, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
       } 
       else if (event.toolName === "web_fetch") {
         const res = event.result as any;
@@ -109,9 +105,9 @@ export default function(api) {
           fs.writeFileSync(filepath, `# ${res.title || 'No Title'}\nURL: ${res.url}\n\n${res.text || ''}`);
 
           await db.run(`
-            INSERT INTO entries (timestamp, session_key, tool, label, url, title, content_path, raw_json, extracted_text, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [timestamp, session_key, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
+            INSERT INTO entries (timestamp, tool, label, url, title, content_path, raw_json, extracted_text, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [timestamp, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
         }
       }
       await db.close();

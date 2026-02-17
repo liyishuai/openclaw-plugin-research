@@ -1,6 +1,6 @@
 {
   "name": "@ysli/openclaw-plugin-research",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Centralized project-generic research database for OpenClaw",
   "type": "module",
   "author": "Yishuai Li",
