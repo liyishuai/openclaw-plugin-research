@@ -41,76 +41,88 @@ export default function(api) {
   async function updateIndex() {
     const db = await getDb();
     const rows = await db.all("SELECT * FROM entries ORDER BY timestamp DESC");
-    const entries = rows.map(row => ({
-      timestamp: row.timestamp,
-      project: row.project,
-      tool: row.tool,
-      label: row.label,
-      url: row.url,
-      title: row.title || row.label,
-      file: row.content_path ? path.basename(row.content_path) : null,
-      summary: row.tool === 'web_search' ? JSON.parse(row.raw_json || '{}') : {
-        title: row.title,
-        preview: (row.extracted_text || '').substring(0, 1000)
+    const entries = rows.map(row => {
+      let summary = {};
+      try {
+        if (row.tool === 'web_search') {
+          summary = JSON.parse(row.raw_json || '{}');
+        } else {
+          summary = {
+            title: row.title,
+            preview: (row.extracted_text || '').substring(0, 1000)
+          };
+        }
+      } catch (e) {
+        summary = { error: "Failed to parse raw_json" };
       }
-    }));
+      
+      return {
+        timestamp: row.timestamp,
+        project: row.project,
+        tool: row.tool,
+        label: row.label,
+        url: row.url,
+        title: row.title || row.label,
+        file: row.content_path ? path.basename(row.content_path) : null,
+        summary
+      };
+    });
     fs.writeFileSync(indexPath, JSON.stringify(entries, null, 2));
     await db.close();
   }
 
-  // Tools
-  api.registerTool({
-    name: "research_log_search",
-    description: "Log a web search query and its results to the central research bank.",
-    parameters: Type.Object({
-      project: Type.String({ description: "Project name (e.g. white-album, euphonium-vn)" }),
-      query: Type.String({ description: "The search query used" }),
-      results: Type.Any({ description: "JSON results from the search tool" }),
-      tags: Type.Optional(Type.Array(Type.String()))
-    }),
-    async execute(_id, params) {
-      const db = await getDb();
+  // Hook into tool results
+  api.on("after_tool_call", async (event, ctx) => {
+    if (event.toolName !== "web_search" && event.toolName !== "web_fetch") {
+      return;
+    }
+
+    if (event.error) {
+      return;
+    }
+
+    // Attempt to determine project from sessionKey or agentId
+    // Default to 'global'
+    let project = "global";
+    if (ctx.sessionKey) {
+      if (ctx.sessionKey.includes("white-album")) project = "white-album";
+      else if (ctx.sessionKey.includes("euphonium")) project = "euphonium-vn";
+    }
+
+    const db = await getDb();
+    const timestamp = new Date().toISOString();
+
+    if (event.toolName === "web_search") {
       await db.run(`
         INSERT INTO entries (timestamp, project, tool, label, raw_json, tags)
         VALUES (?, ?, ?, ?, ?, ?)
-      `, [new Date().toISOString(), params.project, 'web_search', params.query, JSON.stringify(params.results), JSON.stringify(params.tags || [])]);
-      await db.close();
-      await updateIndex();
-      return { content: [{ type: "text", text: `Logged search for query: ${params.query}` }] };
-    }
-  });
+      `, [timestamp, project, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
+      api.logger.info(`[research-archive] Automatically logged search: ${event.params.query}`);
+    } 
+    else if (event.toolName === "web_fetch") {
+      const res = event.result as any;
+      if (res && res.url) {
+        if (!fs.existsSync(downloadsDir)) {
+          fs.mkdirSync(downloadsDir, { recursive: true });
+        }
+        const slug = res.url.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+        const filename = `fetch_${Date.now()}_${slug}.md`;
+        const filepath = path.join(downloadsDir, filename);
+        fs.writeFileSync(filepath, `# ${res.title || 'No Title'}\nURL: ${res.url}\n\n${res.text || ''}`);
 
-  api.registerTool({
-    name: "research_log_fetch",
-    description: "Log a web fetch (crawled page) to the central research bank.",
-    parameters: Type.Object({
-      project: Type.String({ description: "Project name" }),
-      url: Type.String({ description: "URL of the page" }),
-      title: Type.String({ description: "Title of the page" }),
-      text: Type.String({ description: "Extracted markdown/text content" }),
-      raw_result: Type.Any({ description: "Full raw result from the fetch tool" }),
-      tags: Type.Optional(Type.Array(Type.String()))
-    }),
-    async execute(_id, params) {
-      if (!fs.existsSync(downloadsDir)) {
-        fs.mkdirSync(downloadsDir, { recursive: true });
+        await db.run(`
+          INSERT INTO entries (timestamp, project, tool, label, url, title, content_path, raw_json, extracted_text, tags)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [timestamp, project, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
+        api.logger.info(`[research-archive] Automatically logged fetch: ${res.url}`);
       }
-      const slug = params.url.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-      const filename = `fetch_${Date.now()}_${slug}.md`;
-      const filepath = path.join(downloadsDir, filename);
-      fs.writeFileSync(filepath, `# ${params.title}\nURL: ${params.url}\n\n${params.text}`);
-
-      const db = await getDb();
-      await db.run(`
-        INSERT INTO entries (timestamp, project, tool, label, url, title, content_path, raw_json, extracted_text, tags)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [new Date().toISOString(), params.project, 'web_fetch', params.url, params.url, params.title, filepath, JSON.stringify(params.raw_result), params.text, JSON.stringify(params.tags || [])]);
-      await db.close();
-      await updateIndex();
-      return { content: [{ type: "text", text: `Logged fetch for URL: ${params.url} -> ${filename}` }] };
     }
+
+    await db.close();
+    await updateIndex();
   });
 
+  // Tools
   api.registerTool({
     name: "research_find",
     description: "Search the unified research bank for existing findings.",
@@ -127,10 +139,21 @@ export default function(api) {
         sql += " AND project = ?";
         sqlParams.push(params.project);
       }
-      sql += " ORDER BY timestamp DESC";
+      sql += " ORDER BY timestamp DESC LIMIT 20";
       const rows = await db.all(sql, sqlParams);
       await db.close();
-      return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
+      
+      const results = rows.map(r => ({
+        id: r.id,
+        project: r.project,
+        tool: r.tool,
+        title: r.title,
+        label: r.label,
+        timestamp: r.timestamp,
+        preview: (r.extracted_text || '').substring(0, 200)
+      }));
+
+      return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
     }
   });
 
