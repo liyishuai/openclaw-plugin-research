@@ -1,24 +1,26 @@
 # SKILL: Research Archive
 
-You have access to a centralized, project-generic research database. This database automatically tracks all your `web_search` and `web_fetch` activities across all projects.
+You have access to a centralized, project-generic research database that automatically tracks all `web_search` and `web_fetch` activities across all projects.
 
-## 🛠 Tools
-
-- `research_find(query, project?)`: Use this tool to search the historical research bank. Before performing a new `web_search`, always check the bank first to see if relevant information has already been gathered.
-
-## 🤖 Automatic Logging
-
-The `@openclaw/research-archive` plugin is active. It automatically hooks into your research tools:
-- **`web_search`**: Results are logged to the database.
-- **`web_fetch`**: Page content is saved as Markdown in the archive and logged to the database.
-
-## 📂 Database Structure
+## 📂 Database Details
 
 - **Path**: `~/.openclaw/workspace/bank/research/research.db`
-- **Tables**: `entries` (id, timestamp, project, tool, label, url, title, content_path, raw_json, extracted_text, tags)
+- **Tables**: `entries`
+  - `id`: Primary key
+  - `timestamp`: Record time
+  - `project`: Project tag (e.g. `white-album`, `euphonium-vn`, `global`)
+  - `tool`: Source tool (`web_search` or `web_fetch`)
+  - `label`: Search query or URL
+  - `title`: Page title
+  - `content_path`: Path to saved Markdown file
+  - `raw_json`: Original JSON result
+  - `extracted_text`: Full page text (for `web_fetch`)
+  - `tags`: JSON array of project tags
 
 ## 🏛 Usage Protocol
 
-1. **Local-First Search**: Always call `research_find` before `web_search`.
-2. **Context Awareness**: Use the `project` field to filter results if necessary, but remember that research from other projects might be relevant (especially technical facts like `lzss` or `planar graphics`).
-3. **Citations**: When using information found via `research_find`, mention that it was retrieved from the research bank.
+1. **Local-First Search**: Before performing a new `web_search`, query the local database using `sqlite3` via `exec`.
+2. **Flexible Querying**: Use standard SQL to find relevant findings.
+   - Example: `sqlite3 ~/.openclaw/workspace/bank/research/research.db "SELECT id, title, label FROM entries WHERE extracted_text LIKE '%lzss%'" -header -column`
+3. **Markdown Recall**: If you find an entry with a `content_path`, read that file to get the full context.
+4. **Automatic Logging**: The `@openclaw/research-archive` plugin is active and automatically handles logging for all future `web_search` and `web_fetch` calls.
