@@ -59,11 +59,14 @@ export default function(api) {
 
   // Hook into tool results
   api.on("after_tool_call", async (event, ctx) => {
+    api.logger.info(`[research-archive] Hook triggered for tool: ${event.toolName}`);
+    
     if (event.toolName !== "web_search" && event.toolName !== "web_fetch") {
       return;
     }
 
     if (event.error) {
+      api.logger.warn(`[research-archive] Tool ${event.toolName} failed with error: ${event.error}`);
       return;
     }
 
@@ -87,12 +90,10 @@ export default function(api) {
       else if (event.toolName === "web_fetch") {
         const res = event.result as any;
         if (res && res.url) {
-          if (!fs.existsSync(downloadsDir)) {
-            fs.mkdirSync(downloadsDir, { recursive: true });
-          }
           const slug = res.url.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
           const filename = `fetch_${Date.now()}_${slug}.md`;
           const filepath = path.join(downloadsDir, filename);
+          if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
           fs.writeFileSync(filepath, `# ${res.title || 'No Title'}\nURL: ${res.url}\n\n${res.text || ''}`);
 
           await db.run(`
@@ -105,7 +106,7 @@ export default function(api) {
       await db.close();
       await updateIndex();
     } catch (err) {
-      api.logger.error(`[research-archive] Hook failed: ${err.message}`);
+      api.logger.error(`[research-archive] Hook processing failed: ${err.message}`);
     }
   });
 
