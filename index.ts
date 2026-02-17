@@ -14,10 +14,30 @@ export default function(api) {
     if (!fs.existsSync(path.dirname(dbPath))) {
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     }
-    return await open({
+    const db = await open({
       filename: dbPath,
       driver: sqlite3.Database
     });
+    
+    // Initialize schema
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        project TEXT,
+        session_key TEXT,
+        tool TEXT,
+        label TEXT,
+        url TEXT,
+        title TEXT,
+        content_path TEXT,
+        raw_json TEXT,
+        extracted_text TEXT,
+        tags TEXT
+      )
+    `);
+    
+    return db;
   }
 
   async function updateIndex() {
@@ -42,6 +62,7 @@ export default function(api) {
         return {
           timestamp: row.timestamp,
           project: row.project,
+          session_key: row.session_key,
           tool: row.tool,
           label: row.label,
           url: row.url,
@@ -66,11 +87,9 @@ export default function(api) {
       return;
     }
 
-    let project = "global";
-    if (ctx.sessionKey) {
-      if (ctx.sessionKey.includes("white-album")) project = "white-album";
-      else if (ctx.sessionKey.includes("euphonium")) project = "euphonium-vn";
-    }
+    // Generic project detection: use label or default to 'global'
+    const project = ctx.label || "global";
+    const session_key = ctx.sessionKey || "unknown";
 
     try {
       const db = await getDb();
@@ -78,9 +97,9 @@ export default function(api) {
 
       if (event.toolName === "web_search") {
         await db.run(`
-          INSERT INTO entries (timestamp, project, tool, label, raw_json, tags)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `, [timestamp, project, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
+          INSERT INTO entries (timestamp, project, session_key, tool, label, raw_json, tags)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [timestamp, project, session_key, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
       } 
       else if (event.toolName === "web_fetch") {
         const res = event.result as any;
@@ -94,9 +113,9 @@ export default function(api) {
           fs.writeFileSync(filepath, `# ${res.title || 'No Title'}\nURL: ${res.url}\n\n${res.text || ''}`);
 
           await db.run(`
-            INSERT INTO entries (timestamp, project, tool, label, url, title, content_path, raw_json, extracted_text, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [timestamp, project, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
+            INSERT INTO entries (timestamp, project, session_key, tool, label, url, title, content_path, raw_json, extracted_text, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [timestamp, project, session_key, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
         }
       }
       await db.close();

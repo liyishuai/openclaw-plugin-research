@@ -1,8 +1,17 @@
 {
-  "name": "@openclaw/research-archive",
-  "version": "1.0.0",
+  "name": "@ysli/openclaw-plugin-research",
+  "version": "0.1.1",
   "description": "Centralized project-generic research database for OpenClaw",
   "type": "module",
+  "author": "Yishuai Li",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liyishuai/openclaw-plugin-research.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@sinclair/typebox": "^0.34.48",
     "sqlite": "^5.1.1",
