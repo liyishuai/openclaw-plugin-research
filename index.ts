@@ -24,7 +24,6 @@ export default function(api) {
       CREATE TABLE IF NOT EXISTS entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp TEXT,
-        project TEXT,
         session_key TEXT,
         tool TEXT,
         label TEXT,
@@ -61,7 +60,6 @@ export default function(api) {
         
         return {
           timestamp: row.timestamp,
-          project: row.project,
           session_key: row.session_key,
           tool: row.tool,
           label: row.label,
@@ -87,8 +85,6 @@ export default function(api) {
       return;
     }
 
-    // Generic project detection: use label or default to 'global'
-    const project = ctx.label || "global";
     const session_key = ctx.sessionKey || "unknown";
 
     try {
@@ -97,9 +93,9 @@ export default function(api) {
 
       if (event.toolName === "web_search") {
         await db.run(`
-          INSERT INTO entries (timestamp, project, session_key, tool, label, raw_json, tags)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [timestamp, project, session_key, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
+          INSERT INTO entries (timestamp, session_key, tool, label, raw_json, tags)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [timestamp, session_key, 'web_search', event.params.query, JSON.stringify(event.result), JSON.stringify([])]);
       } 
       else if (event.toolName === "web_fetch") {
         const res = event.result as any;
@@ -113,9 +109,9 @@ export default function(api) {
           fs.writeFileSync(filepath, `# ${res.title || 'No Title'}\nURL: ${res.url}\n\n${res.text || ''}`);
 
           await db.run(`
-            INSERT INTO entries (timestamp, project, session_key, tool, label, url, title, content_path, raw_json, extracted_text, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [timestamp, project, session_key, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
+            INSERT INTO entries (timestamp, session_key, tool, label, url, title, content_path, raw_json, extracted_text, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [timestamp, session_key, 'web_fetch', res.url, res.url, res.title || 'No Title', filepath, JSON.stringify(res), res.text || '', JSON.stringify([])]);
         }
       }
       await db.close();
