@@ -1,5 +1,6 @@
 {
   "id": "research-archive",
+  "skills": ["./skills"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
