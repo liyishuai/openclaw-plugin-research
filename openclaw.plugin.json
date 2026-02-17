@@ -1,0 +1,16 @@
+{
+  "id": "research-archive",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "dbPath": { "type": "string" },
+      "downloadsDir": { "type": "string" }
+    }
+  },
+  "uiHints": {
+    "dbPath": { "label": "Database Path", "placeholder": "~/.openclaw/workspace/bank/research/research.db" },
+    "downloadsDir": { "label": "Downloads Directory", "placeholder": "~/.openclaw/workspace/bank/research/downloads" }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "openclaw-plugin-research",
+  "version": "1.0.0",
+  "description": "Centralized project-generic research database for OpenClaw",
+  "type": "module",
+  "dependencies": {
+    "sqlite3": "^5.1.7"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
