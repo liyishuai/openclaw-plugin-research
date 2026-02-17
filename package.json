@@ -1,9 +1,11 @@
 {
-  "name": "openclaw-plugin-research",
+  "name": "@openclaw/research-archive",
   "version": "1.0.0",
   "description": "Centralized project-generic research database for OpenClaw",
   "type": "module",
   "dependencies": {
+    "@sinclair/typebox": "^0.34.48",
+    "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
   "openclaw": {
